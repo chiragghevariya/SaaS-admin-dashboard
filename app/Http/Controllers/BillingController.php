@@ -100,11 +100,27 @@ class BillingController extends Controller
             ];
         }
 
+        // Prefer locally-cached pm_* columns; fall back to Stripe API if empty.
+        $pmType     = $tenant->pm_type;
+        $pmLastFour = $tenant->pm_last_four;
+
+        if (! $pmLastFour && $tenant->stripe_id) {
+            try {
+                $method = $tenant->defaultPaymentMethod();
+                if ($method) {
+                    $pmType     = $method->card->brand ?? $method->type;
+                    $pmLastFour = $method->card->last4 ?? null;
+                }
+            } catch (\Exception) {
+                // Stripe unreachable — leave null.
+            }
+        }
+
         return Inertia::render('Billing/Portal', [
             'subscription'   => $subscriptionData,
             'payment_method' => [
-                'type'      => $tenant->pm_type,
-                'last_four' => $tenant->pm_last_four,
+                'type'      => $pmType,
+                'last_four' => $pmLastFour,
             ],
         ]);
     }
@@ -119,7 +135,8 @@ class BillingController extends Controller
         $this->authorizeAdmin();
         $tenant = app('tenant');
 
-        $session = $tenant->createBillingPortalSession([
+        $session = $tenant->stripe()->billingPortal->sessions->create([
+            'customer'   => $tenant->stripe_id,
             'return_url' => route('billing.portal'),
         ]);
 

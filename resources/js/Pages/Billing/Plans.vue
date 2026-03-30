@@ -1,6 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 const props = defineProps({
@@ -28,6 +28,18 @@ const isActive = props.subscription_status === 'active' || props.subscription_st
         </template>
 
         <div class="max-w-5xl mx-auto">
+
+            <!-- Active subscription banner -->
+            <div v-if="isActive" class="mb-8 flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4">
+                <p class="text-sm text-indigo-800 font-medium">You have an active subscription.</p>
+                <Link
+                    :href="route('billing.portal')"
+                    class="text-sm font-semibold text-indigo-700 hover:text-indigo-900 underline underline-offset-2"
+                >
+                    Manage Subscription →
+                </Link>
+            </div>
+
             <p class="text-center text-gray-500 mb-10">Simple, transparent pricing. No hidden fees.</p>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
