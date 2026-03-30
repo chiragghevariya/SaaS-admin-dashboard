@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
+        $middleware->validateCsrfTokens(except: [
+            'stripe/webhook',
+        ]);
+
         $middleware->alias([
             'tenant' => \App\Http\Middleware\ResolveTenant::class,
             'role'   => \Spatie\Permission\Middleware\RoleMiddleware::class,
