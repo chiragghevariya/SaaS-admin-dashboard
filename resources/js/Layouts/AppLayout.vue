@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
 import { usePermissions } from '@/composables/usePermissions';
 
@@ -9,6 +9,16 @@ const sidebarOpen = ref(true);
 
 const user = computed(() => page.props.auth.user);
 const flash = computed(() => page.props.flash);
+
+const showFlash = ref(false);
+let flashTimer;
+watch(() => flash.value?.success, (msg) => {
+    if (msg) {
+        showFlash.value = true;
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => { showFlash.value = false; }, 3500);
+    }
+}, { immediate: true });
 
 const initials = computed(() => {
     const parts = (user.value?.name || 'U').split(' ');
@@ -142,9 +152,16 @@ function logout() {
                 </slot>
                 <!-- Flash messages -->
                 <div class="ml-auto">
-                    <transition enter-active-class="transition ease-out duration-200" enter-from-class="opacity-0 translate-y-1" enter-to-class="opacity-100 translate-y-0">
+                    <transition
+                        enter-active-class="transition ease-out duration-200"
+                        enter-from-class="opacity-0 translate-y-1"
+                        enter-to-class="opacity-100 translate-y-0"
+                        leave-active-class="transition ease-in duration-150"
+                        leave-from-class="opacity-100 translate-y-0"
+                        leave-to-class="opacity-0 translate-y-1"
+                    >
                         <div
-                            v-if="flash?.success"
+                            v-if="showFlash && flash?.success"
                             class="bg-emerald-50 text-emerald-700 text-sm px-4 py-2 rounded-lg border border-emerald-200"
                         >
                             {{ flash.success }}

@@ -14,6 +14,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
     // Users
     Route::resource('users', UserController::class)->except(['show', 'create', 'edit']);
     Route::put('/users/{user}/role', [UserController::class, 'updateRole'])->name('users.role');
+    Route::put('/users/{user}/reactivate', [UserController::class, 'reactivate'])->name('users.reactivate');
 
     // Billing
     Route::prefix('billing')->name('billing.')->group(function () {

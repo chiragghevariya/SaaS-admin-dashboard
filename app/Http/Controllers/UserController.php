@@ -79,15 +79,29 @@ class UserController extends Controller
         $this->authorize('delete', $user);
         $this->ensureSameTenant($user);
 
+        abort_if($user->id === auth()->id(), 403, 'You cannot deactivate your own account.');
+
         $user->update(['status' => 'inactive']);
 
-        return redirect()->route('users.index')->with('success', 'User deactivated.');
+        return redirect()->route('users.index')->with('success', "{$user->name} has been deactivated.");
+    }
+
+    public function reactivate(User $user)
+    {
+        $this->authorize('update', $user);
+        $this->ensureSameTenant($user);
+
+        $user->update(['status' => 'active']);
+
+        return redirect()->route('users.index')->with('success', "{$user->name} has been reactivated.");
     }
 
     public function updateRole(Request $request, User $user)
     {
         $this->authorize('update', $user);
         $this->ensureSameTenant($user);
+
+        abort_if($user->id === $request->user()->id, 403, 'You cannot change your own role.');
 
         $request->validate(['role' => 'required|in:admin,member']);
 

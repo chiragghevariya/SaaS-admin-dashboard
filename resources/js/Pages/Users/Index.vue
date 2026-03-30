@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { ref, watch, computed } from 'vue';
 import { usePermissions } from '@/composables/usePermissions';
 
 const props = defineProps({
@@ -9,7 +9,9 @@ const props = defineProps({
     search: String,
 });
 
+const page = usePage();
 const { isAdmin } = usePermissions();
+const currentUserId = computed(() => page.props.auth.user.id);
 
 // Search
 const searchInput = ref(props.search ?? '');
@@ -40,6 +42,13 @@ function updateRole(userId, role) {
 function deactivate(userId) {
     if (confirm('Deactivate this user?')) {
         router.delete(route('users.destroy', userId), { preserveScroll: true });
+    }
+}
+
+// Reactivate
+function reactivate(userId) {
+    if (confirm('Reactivate this user?')) {
+        router.put(route('users.reactivate', userId), {}, { preserveScroll: true });
     }
 }
 
@@ -83,61 +92,87 @@ const roleColor = (role) => role === 'admin'
 
         <!-- Table -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <table class="min-w-full divide-y divide-gray-100">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                        <th v-if="isAdmin" class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-50">
-                    <tr v-for="user in users.data" :key="user.id" class="hover:bg-gray-50 transition-colors">
-                        <td class="px-6 py-4">
-                            <div class="flex items-center gap-3">
-                                <div class="h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-                                    <span class="text-indigo-700 text-xs font-bold">
-                                        {{ user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) }}
-                                    </span>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-100">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                            <th v-if="isAdmin" class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        <tr v-for="user in users.data" :key="user.id" class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4 min-w-[200px]">
+                                <div class="flex items-center gap-3">
+                                    <div class="h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                                        <span class="text-indigo-700 text-xs font-bold">
+                                            {{ user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) }}
+                                        </span>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-medium text-gray-900 truncate">{{ user.name }}</p>
+                                        <p class="text-xs text-gray-500 truncate">{{ user.email }}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p class="text-sm font-medium text-gray-900">{{ user.name }}</p>
-                                    <p class="text-xs text-gray-500">{{ user.email }}</p>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-6 py-4">
-                            <select
-                                v-if="isAdmin"
-                                :value="user.roles[0]?.name"
-                                @change="updateRole(user.id, $event.target.value)"
-                                class="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option value="admin">Admin</option>
-                                <option value="member">Member</option>
-                            </select>
-                            <span v-else class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize" :class="roleColor(user.roles[0]?.name)">
-                                {{ user.roles[0]?.name ?? 'member' }}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4">
-                            <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize" :class="statusColor(user.status)">
-                                {{ user.status }}
-                            </span>
-                        </td>
-                        <td v-if="isAdmin" class="px-6 py-4 text-right">
-                            <button
-                                v-if="user.status === 'active'"
-                                @click="deactivate(user.id)"
-                                class="text-xs text-red-600 hover:text-red-800 font-medium"
-                            >
-                                Deactivate
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+                            </td>
+                            <td class="px-6 py-4 min-w-[130px]">
+                                <!-- Editable role dropdown — hidden for the current admin (self) -->
+                                <select
+                                    v-if="isAdmin && user.id !== currentUserId"
+                                    :value="user.roles[0]?.name"
+                                    @change="updateRole(user.id, $event.target.value)"
+                                    class="text-xs font-semibold rounded-full px-3 py-1 border-0 cursor-pointer appearance-none pr-6 bg-no-repeat focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                    :class="user.roles[0]?.name === 'admin' ? 'bg-indigo-50 text-indigo-700' : 'bg-blue-50 text-blue-700'"
+                                    :style="{
+                                        backgroundImage: user.roles[0]?.name === 'admin'
+                                            ? `url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234338ca' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")`
+                                            : `url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%231d4ed8' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")`,
+                                        backgroundPosition: 'right 8px center',
+                                        backgroundSize: '10px'
+                                    }"
+                                >
+                                    <option value="admin">Admin</option>
+                                    <option value="member">Member</option>
+                                </select>
+                                <!-- Read-only badge for self or non-admins -->
+                                <span
+                                    v-else
+                                    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize"
+                                    :class="roleColor(user.roles[0]?.name)"
+                                >
+                                    {{ user.roles[0]?.name ?? 'member' }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize" :class="statusColor(user.status)">
+                                    {{ user.status }}
+                                </span>
+                            </td>
+                            <td v-if="isAdmin" class="px-6 py-4 text-right whitespace-nowrap">
+                                <template v-if="user.id !== currentUserId">
+                                    <button
+                                        v-if="user.status === 'active'"
+                                        @click="deactivate(user.id)"
+                                        class="text-xs text-red-600 hover:text-red-800 font-medium"
+                                    >
+                                        Deactivate
+                                    </button>
+                                    <button
+                                        v-else
+                                        @click="reactivate(user.id)"
+                                        class="text-xs text-emerald-600 hover:text-emerald-800 font-medium"
+                                    >
+                                        Reactivate
+                                    </button>
+                                </template>
+                                <span v-else class="text-xs text-gray-400 italic">You</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <!-- Pagination -->
             <div v-if="users.last_page > 1" class="px-6 py-4 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
