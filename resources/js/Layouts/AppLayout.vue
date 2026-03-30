@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
 import { usePermissions } from '@/composables/usePermissions';
 
@@ -12,13 +12,21 @@ const flash = computed(() => page.props.flash);
 
 const showFlash = ref(false);
 let flashTimer;
-watch(() => flash.value?.success, (msg) => {
-    if (msg) {
+
+function triggerFlash() {
+    if (flash.value?.success) {
         showFlash.value = true;
         clearTimeout(flashTimer);
         flashTimer = setTimeout(() => { showFlash.value = false; }, 3500);
     }
-}, { immediate: true });
+}
+
+// Fire on initial page load
+triggerFlash();
+
+// Fire on every Inertia navigation — even when the flash message string is identical
+const stopFlashListener = router.on('navigate', triggerFlash);
+onUnmounted(() => stopFlashListener());
 
 const initials = computed(() => {
     const parts = (user.value?.name || 'U').split(' ');

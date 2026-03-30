@@ -49,18 +49,19 @@ class UserController extends Controller
         $tenant = app('tenant');
 
         $user = User::create([
-            'tenant_id' => $tenant->id,
-            'name'      => $validated['name'],
-            'email'     => $validated['email'],
-            'password'  => Hash::make(\Illuminate\Support\Str::random(16)),
-            'status'    => 'active',
+            'tenant_id'         => $tenant->id,
+            'name'              => $validated['name'],
+            'email'             => $validated['email'],
+            'password'          => Hash::make(\Illuminate\Support\Str::random(16)),
+            'status'            => 'active',
+            'email_verified_at' => now(), // admin-invited users skip the verification step
         ]);
 
         $user->assignRole('member');
 
         $token = Password::broker()->createToken($user);
         $setPasswordUrl = route('password.reset', ['token' => $token, 'email' => $user->email]);
-        Mail::to($user->email)->queue(new UserInvited($user, $setPasswordUrl));
+        Mail::to($user->email)->send(new UserInvited($user, $setPasswordUrl));
 
         return redirect()->route('users.index')
             ->with('success', "Invited {$user->name} successfully.");
@@ -89,7 +90,7 @@ class UserController extends Controller
         abort_if($user->id === auth()->id(), 403, 'You cannot deactivate your own account.');
 
         $user->update(['status' => 'inactive']);
-        Mail::to($user->email)->queue(new UserDeactivated($user));
+        Mail::to($user->email)->send(new UserDeactivated($user));
 
         return redirect()->route('users.index')->with('success', "{$user->name} has been deactivated.");
     }
@@ -100,7 +101,7 @@ class UserController extends Controller
         $this->ensureSameTenant($user);
 
         $user->update(['status' => 'active']);
-        Mail::to($user->email)->queue(new UserReactivated($user));
+        Mail::to($user->email)->send(new UserReactivated($user));
 
         return redirect()->route('users.index')->with('success', "{$user->name} has been reactivated.");
     }

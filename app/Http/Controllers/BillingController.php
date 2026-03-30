@@ -8,20 +8,18 @@ use Laravel\Cashier\Exceptions\IncompletePayment;
 
 class BillingController extends Controller
 {
-    public function __construct()
+    private function authorizeAdmin(): void
     {
-        $this->middleware(function ($request, $next) {
-            abort_unless(
-                $request->user()?->hasAnyRole(['admin', 'super_admin']),
-                403,
-                'Only administrators can manage billing.'
-            );
-            return $next($request);
-        });
+        abort_unless(
+            auth()->user()?->hasAnyRole(['admin', 'super_admin']),
+            403,
+            'Only administrators can manage billing.'
+        );
     }
 
     public function plans()
     {
+        $this->authorizeAdmin();
         $tenant = app('tenant');
 
         $subscription = $tenant->subscription('default');
@@ -58,6 +56,7 @@ class BillingController extends Controller
 
     public function checkout(Request $request)
     {
+        $this->authorizeAdmin();
         $request->validate(['price_id' => 'required|string']);
 
         $tenant = app('tenant');
@@ -73,12 +72,14 @@ class BillingController extends Controller
 
     public function success(Request $request)
     {
+        $this->authorizeAdmin();
         return redirect()->route('billing.portal')
             ->with('success', 'Subscription activated! Welcome aboard.');
     }
 
     public function portal(Request $request)
     {
+        $this->authorizeAdmin();
         $tenant = app('tenant');
         $subscription = $tenant->subscription('default');
 
@@ -99,6 +100,7 @@ class BillingController extends Controller
 
     public function redirectToPortal(Request $request)
     {
+        $this->authorizeAdmin();
         $tenant = app('tenant');
 
         return $tenant->redirectToBillingPortal(route('billing.portal'));
@@ -106,6 +108,7 @@ class BillingController extends Controller
 
     public function cancel(Request $request)
     {
+        $this->authorizeAdmin();
         $tenant = app('tenant');
         $tenant->subscription('default')?->cancel();
 

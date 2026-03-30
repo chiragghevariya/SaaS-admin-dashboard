@@ -11,7 +11,7 @@ const props = defineProps({
 
 const page = usePage();
 const { isAdmin } = usePermissions();
-const currentUserId = computed(() => page.props.auth.user.id);
+const currentUserId = computed(() => page.props.auth.user?.id);
 
 // Search
 const searchInput = ref(props.search ?? '');
@@ -126,7 +126,7 @@ const roleDropdownStyle = (role) => ({
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                            <th v-if="isAdmin" class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th class="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50">
@@ -171,30 +171,32 @@ const roleDropdownStyle = (role) => ({
                                     {{ user.status }}
                                 </span>
                             </td>
-                            <td v-if="isAdmin" class="px-6 py-4 text-right whitespace-nowrap">
-                                <template v-if="user.id !== currentUserId">
-                                    <button
-                                        @click="openEdit(user)"
-                                        class="text-xs text-indigo-600 hover:text-indigo-800 font-medium mr-3"
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        v-if="user.status === 'active'"
-                                        @click="deactivate(user.id)"
-                                        class="text-xs text-red-600 hover:text-red-800 font-medium"
-                                    >
-                                        Deactivate
-                                    </button>
-                                    <button
-                                        v-else
-                                        @click="reactivate(user.id)"
-                                        class="text-xs text-emerald-600 hover:text-emerald-800 font-medium"
-                                    >
-                                        Reactivate
-                                    </button>
+                            <td class="px-6 py-4 text-right whitespace-nowrap">
+                                <template v-if="isAdmin">
+                                    <template v-if="user.id !== currentUserId">
+                                        <button
+                                            @click="openEdit(user)"
+                                            class="text-xs text-indigo-600 hover:text-indigo-800 font-medium mr-3"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            v-if="user.status === 'active'"
+                                            @click="deactivate(user.id)"
+                                            class="text-xs text-red-600 hover:text-red-800 font-medium"
+                                        >
+                                            Deactivate
+                                        </button>
+                                        <button
+                                            v-else
+                                            @click="reactivate(user.id)"
+                                            class="text-xs text-emerald-600 hover:text-emerald-800 font-medium"
+                                        >
+                                            Reactivate
+                                        </button>
+                                    </template>
+                                    <span v-else class="text-xs text-gray-400 italic">You</span>
                                 </template>
-                                <span v-else class="text-xs text-gray-400 italic">You</span>
                             </td>
                         </tr>
                     </tbody>
