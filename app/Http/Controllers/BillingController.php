@@ -187,7 +187,9 @@ class BillingController extends Controller
         // Fetch current period end from Stripe
         try {
             $stripeSub = $subscription->asStripeSubscription();
-            return Carbon::createFromTimestamp($stripeSub->current_period_end)->format('M d, Y');
+            $timestamp  = $stripeSub->current_period_end ?? null;
+
+            return $timestamp ? Carbon::createFromTimestamp($timestamp)->format('M d, Y') : null;
         } catch (\Exception) {
             return null;
         }
