@@ -27,6 +27,24 @@ watch(searchInput, (val) => {
 const showInviteModal = ref(false);
 const inviteForm = useForm({ name: '', email: '' });
 
+// Edit user form
+const showEditModal = ref(false);
+const editForm = useForm({ name: '', email: '' });
+let editingUserId = ref(null);
+
+function openEdit(user) {
+    editingUserId.value = user.id;
+    editForm.name  = user.name;
+    editForm.email = user.email;
+    showEditModal.value = true;
+}
+
+function saveEdit() {
+    editForm.put(route('users.update', editingUserId.value), {
+        onSuccess: () => { showEditModal.value = false; editForm.reset(); }
+    });
+}
+
 function invite() {
     inviteForm.post(route('users.store'), {
         onSuccess: () => { showInviteModal.value = false; inviteForm.reset(); }
@@ -156,6 +174,12 @@ const roleDropdownStyle = (role) => ({
                             <td v-if="isAdmin" class="px-6 py-4 text-right whitespace-nowrap">
                                 <template v-if="user.id !== currentUserId">
                                     <button
+                                        @click="openEdit(user)"
+                                        class="text-xs text-indigo-600 hover:text-indigo-800 font-medium mr-3"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
                                         v-if="user.status === 'active'"
                                         @click="deactivate(user.id)"
                                         class="text-xs text-red-600 hover:text-red-800 font-medium"
@@ -194,6 +218,33 @@ const roleDropdownStyle = (role) => ({
                 </div>
             </div>
         </div>
+
+        <!-- Edit Modal -->
+        <teleport to="body">
+            <div v-if="showEditModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Edit User</h2>
+                    <form @submit.prevent="saveEdit" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                            <input v-model="editForm.name" type="text" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                            <p v-if="editForm.errors.name" class="text-red-500 text-xs mt-1">{{ editForm.errors.name }}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                            <input v-model="editForm.email" type="email" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                            <p v-if="editForm.errors.email" class="text-red-500 text-xs mt-1">{{ editForm.errors.email }}</p>
+                        </div>
+                        <div class="flex gap-3 pt-2">
+                            <button type="button" @click="showEditModal = false" class="flex-1 border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+                            <button type="submit" :disabled="editForm.processing" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                                {{ editForm.processing ? 'Saving…' : 'Save Changes' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </teleport>
 
         <!-- Invite Modal -->
         <teleport to="body">

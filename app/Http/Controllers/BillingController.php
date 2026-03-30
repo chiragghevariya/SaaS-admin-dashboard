@@ -8,6 +8,18 @@ use Laravel\Cashier\Exceptions\IncompletePayment;
 
 class BillingController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            abort_unless(
+                $request->user()?->hasAnyRole(['admin', 'super_admin']),
+                403,
+                'Only administrators can manage billing.'
+            );
+            return $next($request);
+        });
+    }
+
     public function plans()
     {
         $tenant = app('tenant');

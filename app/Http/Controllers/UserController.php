@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\UserDeactivated;
+use App\Mail\UserInvited;
+use App\Mail\UserReactivated;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Inertia\Inertia;
 
 class UserController extends Controller
@@ -54,6 +58,10 @@ class UserController extends Controller
 
         $user->assignRole('member');
 
+        $token = Password::broker()->createToken($user);
+        $setPasswordUrl = route('password.reset', ['token' => $token, 'email' => $user->email]);
+        Mail::to($user->email)->queue(new UserInvited($user, $setPasswordUrl));
+
         return redirect()->route('users.index')
             ->with('success', "Invited {$user->name} successfully.");
     }
@@ -64,9 +72,8 @@ class UserController extends Controller
         $this->ensureSameTenant($user);
 
         $validated = $request->validate([
-            'name'   => 'required|string|max:255',
-            'email'  => "required|email|unique:users,email,{$user->id}",
-            'status' => 'required|in:active,inactive',
+            'name'  => 'required|string|max:255',
+            'email' => "required|email|unique:users,email,{$user->id}",
         ]);
 
         $user->update($validated);
@@ -82,6 +89,7 @@ class UserController extends Controller
         abort_if($user->id === auth()->id(), 403, 'You cannot deactivate your own account.');
 
         $user->update(['status' => 'inactive']);
+        Mail::to($user->email)->queue(new UserDeactivated($user));
 
         return redirect()->route('users.index')->with('success', "{$user->name} has been deactivated.");
     }
@@ -92,6 +100,7 @@ class UserController extends Controller
         $this->ensureSameTenant($user);
 
         $user->update(['status' => 'active']);
+        Mail::to($user->email)->queue(new UserReactivated($user));
 
         return redirect()->route('users.index')->with('success', "{$user->name} has been reactivated.");
     }
