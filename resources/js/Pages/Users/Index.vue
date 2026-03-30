@@ -59,6 +59,15 @@ const statusColor = (status) => status === 'active'
 const roleColor = (role) => role === 'admin'
     ? 'bg-indigo-50 text-indigo-700'
     : 'bg-blue-50 text-blue-700';
+
+const CHEVRON_INDIGO = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234338ca' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")";
+const CHEVRON_BLUE  = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%231d4ed8' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")";
+
+const roleDropdownStyle = (role) => ({
+    backgroundImage: role === 'admin' ? CHEVRON_INDIGO : CHEVRON_BLUE,
+    backgroundPosition: 'right 8px center',
+    backgroundSize: '10px',
+});
 </script>
 
 <template>
@@ -125,13 +134,7 @@ const roleColor = (role) => role === 'admin'
                                     @change="updateRole(user.id, $event.target.value)"
                                     class="text-xs font-semibold rounded-full px-3 py-1 border-0 cursor-pointer appearance-none pr-6 bg-no-repeat focus:outline-none focus:ring-2 focus:ring-indigo-400"
                                     :class="user.roles[0]?.name === 'admin' ? 'bg-indigo-50 text-indigo-700' : 'bg-blue-50 text-blue-700'"
-                                    :style="{
-                                        backgroundImage: user.roles[0]?.name === 'admin'
-                                            ? `url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234338ca' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")`
-                                            : `url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%231d4ed8' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")`,
-                                        backgroundPosition: 'right 8px center',
-                                        backgroundSize: '10px'
-                                    }"
+                                    :style="roleDropdownStyle(user.roles[0]?.name)"
                                 >
                                     <option value="admin">Admin</option>
                                     <option value="member">Member</option>
