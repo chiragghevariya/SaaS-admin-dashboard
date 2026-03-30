@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Laravel\Cashier\Exceptions\IncompletePayment;
@@ -25,7 +26,7 @@ class BillingController extends Controller
         $subscription = $tenant->subscription('default');
 
         return Inertia::render('Billing/Plans', [
-            'current_plan'     => $subscription?->stripe_price,
+            'current_plan'        => $subscription?->stripe_price,
             'subscription_status' => $subscription?->stripe_status,
             'plans' => [
                 [
@@ -73,6 +74,7 @@ class BillingController extends Controller
     public function success(Request $request)
     {
         $this->authorizeAdmin();
+
         return redirect()->route('billing.portal')
             ->with('success', 'Subscription activated! Welcome aboard.');
     }
@@ -80,30 +82,48 @@ class BillingController extends Controller
     public function portal(Request $request)
     {
         $this->authorizeAdmin();
-        $tenant = app('tenant');
+        $tenant       = app('tenant');
         $subscription = $tenant->subscription('default');
 
+        $subscriptionData = null;
+
+        if ($subscription) {
+            $subscriptionData = [
+                'status'          => $subscription->stripe_status,
+                'plan_name'       => $this->getPlanName($subscription->stripe_price),
+                'plan_price'      => $this->getPlanPrice($subscription->stripe_price),
+                'trial_ends_at'   => $subscription->trial_ends_at?->format('M d, Y'),
+                'ends_at'         => $subscription->ends_at?->format('M d, Y'),
+                'next_billing_at' => $this->getNextBillingDate($subscription),
+                'on_grace_period' => $subscription->onGracePeriod(),
+                'cancelled'       => $subscription->canceled(),
+            ];
+        }
+
         return Inertia::render('Billing/Portal', [
-            'subscription' => $subscription ? [
-                'status'        => $subscription->stripe_status,
-                'price'         => $subscription->stripe_price,
-                'trial_ends_at' => $subscription->trial_ends_at?->format('M d, Y'),
-                'ends_at'       => $subscription->ends_at?->format('M d, Y'),
-                'plan_name'     => $this->getPlanName($subscription->stripe_price),
-            ] : null,
+            'subscription'   => $subscriptionData,
             'payment_method' => [
-                'type'         => $tenant->pm_type,
-                'last_four'    => $tenant->pm_last_four,
+                'type'      => $tenant->pm_type,
+                'last_four' => $tenant->pm_last_four,
             ],
         ]);
     }
 
+    /**
+     * Redirect to the Stripe Customer Portal.
+     * Uses Inertia::location() so the external URL triggers a full browser redirect
+     * instead of an Inertia page visit (which would fail with "failed to load data").
+     */
     public function redirectToPortal(Request $request)
     {
         $this->authorizeAdmin();
         $tenant = app('tenant');
 
-        return $tenant->redirectToBillingPortal(route('billing.portal'));
+        $session = $tenant->createBillingPortalSession([
+            'return_url' => route('billing.portal'),
+        ]);
+
+        return Inertia::location($session->url);
     }
 
     public function cancel(Request $request)
@@ -113,16 +133,63 @@ class BillingController extends Controller
         $tenant->subscription('default')?->cancel();
 
         return redirect()->route('billing.portal')
-            ->with('success', 'Subscription cancelled. You will retain access until the period ends.');
+            ->with('success', 'Subscription cancelled. You will retain access until the end of the billing period.');
     }
+
+    public function resume(Request $request)
+    {
+        $this->authorizeAdmin();
+        $tenant       = app('tenant');
+        $subscription = $tenant->subscription('default');
+
+        abort_unless($subscription?->onGracePeriod(), 422, 'This subscription cannot be resumed.');
+
+        $subscription->resume();
+
+        return redirect()->route('billing.portal')
+            ->with('success', 'Subscription resumed. Auto-renew has been re-enabled.');
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private function getPlanName(?string $priceId): string
     {
-        return match($priceId) {
+        return match ($priceId) {
             config('cashier.prices.starter')    => 'Starter',
             config('cashier.prices.pro')        => 'Pro',
             config('cashier.prices.enterprise') => 'Enterprise',
             default                             => 'Unknown Plan',
         };
+    }
+
+    private function getPlanPrice(?string $priceId): ?int
+    {
+        return match ($priceId) {
+            config('cashier.prices.starter')    => 29,
+            config('cashier.prices.pro')        => 79,
+            config('cashier.prices.enterprise') => 199,
+            default                             => null,
+        };
+    }
+
+    private function getNextBillingDate($subscription): ?string
+    {
+        // On grace period means cancelled — no future billing
+        if ($subscription->onGracePeriod()) {
+            return null;
+        }
+
+        // Trial: next charge is at trial end
+        if ($subscription->onTrial()) {
+            return $subscription->trial_ends_at?->format('M d, Y');
+        }
+
+        // Fetch current period end from Stripe
+        try {
+            $stripeSub = $subscription->asStripeSubscription();
+            return Carbon::createFromTimestamp($stripeSub->current_period_end)->format('M d, Y');
+        } catch (\Exception) {
+            return null;
+        }
     }
 }

@@ -25,6 +25,7 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function () {
         Route::get('/portal', [BillingController::class, 'portal'])->name('portal');
         Route::post('/portal/redirect', [BillingController::class, 'redirectToPortal'])->name('portal.redirect');
         Route::post('/cancel', [BillingController::class, 'cancel'])->name('cancel');
+        Route::post('/resume', [BillingController::class, 'resume'])->name('resume');
     });
 
     // Profile
