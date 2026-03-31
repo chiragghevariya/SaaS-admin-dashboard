@@ -149,8 +149,12 @@ const roleDropdownStyle = (role) => ({
             <div v-if="isAdmin" class="ml-auto flex items-center gap-3">
                 <!-- User count / limit indicator -->
                 <span v-if="plan" class="text-xs text-gray-400">
-                    {{ plan.user_count }} /
-                    {{ plan.user_limit === null ? '∞' : plan.user_limit }} users
+                    <template v-if="plan.user_limit === null">
+                        {{ plan.user_count }} users
+                    </template>
+                    <template v-else>
+                        {{ plan.user_count }} / {{ plan.user_limit }} users
+                    </template>
                 </span>
                 <button
                     @click="openInvite"
@@ -308,7 +312,12 @@ const roleDropdownStyle = (role) => ({
                 <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
                     <h2 class="text-lg font-semibold text-gray-900 mb-1">Invite Team Member</h2>
                     <p v-if="plan" class="text-xs text-gray-400 mb-4">
-                        {{ plan.user_count }} / {{ plan.user_limit === null ? '∞' : plan.user_limit }} seats used
+                        <template v-if="plan.user_limit === null">
+                            {{ plan.user_count }} seats used
+                        </template>
+                        <template v-else>
+                            {{ plan.user_count }} / {{ plan.user_limit }} seats used
+                        </template>
                     </p>
                     <form @submit.prevent="invite" class="space-y-4">
                         <div>

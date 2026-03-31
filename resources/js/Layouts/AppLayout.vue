@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
 import { usePermissions } from '@/composables/usePermissions';
 
@@ -29,9 +29,13 @@ watch(
         const msg = success || error;
         if (msg) {
             flashType.value = success ? 'success' : 'error';
-            showFlash.value = true;
             clearTimeout(flashTimer);
-            flashTimer = setTimeout(() => { showFlash.value = false; }, 4000);
+            // Hide first so the enter animation replays even for identical messages
+            showFlash.value = false;
+            nextTick(() => {
+                showFlash.value = true;
+                flashTimer = setTimeout(() => { showFlash.value = false; }, 4000);
+            });
         }
     },
     { flush: 'post' }
