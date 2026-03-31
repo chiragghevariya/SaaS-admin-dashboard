@@ -104,7 +104,7 @@ class BillingController extends Controller
         $pmType     = $tenant->pm_type;
         $pmLastFour = $tenant->pm_last_four;
 
-        if (! $pmLastFour && $tenant->stripe_id) {
+        if (!$pmLastFour && $tenant->stripe_id) {
             try {
                 $method = $tenant->defaultPaymentMethod();
                 if ($method) {
@@ -205,6 +205,7 @@ class BillingController extends Controller
         try {
             $stripeSub = $subscription->asStripeSubscription();
             $timestamp  = $stripeSub->current_period_end ?? null;
+            $timestamp  = $stripeSub['items']['data'][0]['current_period_end'] ?? null;
 
             return $timestamp ? Carbon::createFromTimestamp($timestamp)->format('M d, Y') : null;
         } catch (\Exception) {

@@ -17,14 +17,27 @@ class WebhookController extends CashierWebhookController
      * — log the payment to payment_logs
      * — recover past_due subscriptions to active
      */
-    public function handleInvoicePaymentSucceeded(array $payload): Response
+
+
+    public function handleInvoicePaymentSucceeded(array $payload)
     {
-        $response = parent::handleInvoicePaymentSucceeded($payload);
+        Log::info('Handling invoice.payment_succeeded webhook', [
+            'invoice_id' => $payload['data']['object']['id'] ?? null,
+            'customer_id' => $payload['data']['object']['customer'] ?? null,
+        ]);
+
+        // $response = parent::handleInvoicePaymentSucceeded($payload);
+        $response = parent::handleCustomerSubscriptionCreated($payload);
 
         $invoice = $payload['data']['object'];
         $tenant  = Tenant::where('stripe_id', $invoice['customer'] ?? '')->first();
 
         if ($tenant && ($invoice['amount_paid'] ?? 0) > 0) {
+            Log::info('Processing successful payment webhook', [
+                'tenant_id' => $tenant->id,
+                'invoice_id' => $invoice['id'],
+            ]);
+
             PaymentLog::updateOrCreate(
                 ['stripe_invoice_id' => $invoice['id']],
                 [
@@ -51,6 +64,7 @@ class WebhookController extends CashierWebhookController
         }
 
         return $response;
+        // return true;
     }
 
     /**
