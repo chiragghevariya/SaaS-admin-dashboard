@@ -18,6 +18,33 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
+        // Resolve tenant safely — not available on unauthenticated/non-tenant routes
+        $tenant = null;
+        if ($user && app()->bound('tenant')) {
+            try {
+                $tenant = app('tenant');
+            } catch (\Throwable) {
+                $tenant = null;
+            }
+        }
+
+        $plan = null;
+        if ($tenant) {
+            $planName = $tenant->activePlan();
+            $plan = [
+                'name'        => $planName,
+                'subscribed'  => $tenant->subscribed('default'),
+                'user_limit'  => $tenant->userLimit(),
+                'user_count'  => $tenant->users()->count(),
+                'features'    => [
+                    'advanced_analytics'  => in_array($planName, ['pro', 'enterprise'], true),
+                    'priority_support'    => in_array($planName, ['pro', 'enterprise'], true),
+                    'custom_integrations' => $planName === 'enterprise',
+                    'sla_guarantee'       => $planName === 'enterprise',
+                ],
+            ];
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
@@ -35,6 +62,7 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error'   => fn () => $request->session()->get('error'),
             ],
+            'plan' => $plan,
         ];
     }
 }

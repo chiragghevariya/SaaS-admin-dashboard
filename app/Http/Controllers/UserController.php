@@ -41,12 +41,24 @@ class UserController extends Controller
     {
         $this->authorize('create', User::class);
 
+        $tenant = app('tenant');
+
+        // Require an active subscription before inviting anyone
+        if (! $tenant->subscribed('default')) {
+            return redirect()->route('billing.plans')
+                ->with('error', 'You need an active subscription to invite team members. Please choose a plan first.');
+        }
+
+        // Enforce plan user limit
+        $limit = $tenant->userLimit();
+        if ($limit !== null && $limit > 0 && $tenant->users()->count() >= $limit) {
+            return back()->with('error', "Your {$tenant->activePlan()} plan allows up to {$limit} users. Upgrade your plan to invite more members.");
+        }
+
         $validated = $request->validate([
             'name'  => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
         ]);
-
-        $tenant = app('tenant');
 
         $user = User::create([
             'tenant_id'         => $tenant->id,
@@ -54,7 +66,7 @@ class UserController extends Controller
             'email'             => $validated['email'],
             'password'          => Hash::make(\Illuminate\Support\Str::random(16)),
             'status'            => 'active',
-            'email_verified_at' => now(), // admin-invited users skip the verification step
+            'email_verified_at' => now(),
         ]);
 
         $user->assignRole('member');
@@ -82,6 +94,9 @@ class UserController extends Controller
         return redirect()->back()->with('success', 'User updated.');
     }
 
+    /**
+     * Deactivate a user (status → inactive, user remains visible in the list).
+     */
     public function destroy(User $user)
     {
         $this->authorize('delete', $user);
@@ -92,7 +107,27 @@ class UserController extends Controller
         $user->update(['status' => 'inactive']);
         Mail::to($user->email)->send(new UserDeactivated($user));
 
-        return redirect()->route('users.index')->with('success', "{$user->name} has been deactivated.");
+        return redirect()->route('users.index')
+            ->with('success', "{$user->name} has been deactivated.");
+    }
+
+    /**
+     * Permanently delete a user via soft-delete (removed from all lists).
+     * Only available for inactive users to prevent accidental deletion.
+     */
+    public function forceDestroy(User $user)
+    {
+        $this->authorize('delete', $user);
+        $this->ensureSameTenant($user);
+
+        abort_if($user->id === auth()->id(), 403, 'You cannot delete your own account.');
+        abort_if($user->status === 'active', 422, 'Deactivate the user before deleting them.');
+
+        $name = $user->name;
+        $user->delete(); // soft-delete — excluded from all queries automatically
+
+        return redirect()->route('users.index')
+            ->with('success', "{$name} has been permanently deleted.");
     }
 
     public function reactivate(User $user)
@@ -103,7 +138,8 @@ class UserController extends Controller
         $user->update(['status' => 'active']);
         Mail::to($user->email)->send(new UserReactivated($user));
 
-        return redirect()->route('users.index')->with('success', "{$user->name} has been reactivated.");
+        return redirect()->route('users.index')
+            ->with('success', "{$user->name} has been reactivated.");
     }
 
     public function updateRole(Request $request, User $user)

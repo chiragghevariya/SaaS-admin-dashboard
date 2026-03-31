@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted, nextTick } from 'vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
 import { usePermissions } from '@/composables/usePermissions';
 
@@ -7,25 +7,29 @@ const page = usePage();
 const { isAdmin } = usePermissions();
 const sidebarOpen = ref(true);
 
-const user = computed(() => page.props.auth.user);
+const user  = computed(() => page.props.auth.user);
 const flash = computed(() => page.props.flash);
+const plan  = computed(() => page.props.plan);
 
 const showFlash = ref(false);
+const flashType = ref('success'); // 'success' | 'error'
 let flashTimer;
 
 function triggerFlash() {
-    if (flash.value?.success) {
-        showFlash.value = true;
+    const msg = flash.value?.success || flash.value?.error;
+    if (msg) {
+        flashType.value  = flash.value?.success ? 'success' : 'error';
+        showFlash.value  = true;
         clearTimeout(flashTimer);
-        flashTimer = setTimeout(() => { showFlash.value = false; }, 3500);
+        flashTimer = setTimeout(() => { showFlash.value = false; }, 4000);
     }
 }
 
 // Fire on initial page load
 triggerFlash();
 
-// Fire on every Inertia navigation — even when the flash message string is identical
-const stopFlashListener = router.on('navigate', triggerFlash);
+// Use nextTick so Vue has processed the updated page.props before we read flash
+const stopFlashListener = router.on('navigate', () => nextTick(triggerFlash));
 onUnmounted(() => stopFlashListener());
 
 const initials = computed(() => {
@@ -35,32 +39,47 @@ const initials = computed(() => {
 
 const navItems = computed(() => [
     {
-        name: 'Dashboard',
-        href: route('dashboard'),
-        icon: '◻',
+        name:   'Dashboard',
+        href:   route('dashboard'),
+        icon:   'dashboard',
         active: route().current('dashboard'),
-        show: true,
+        show:   true,
     },
     {
-        name: 'Users',
-        href: route('users.index'),
-        icon: '◻',
+        name:   'Users',
+        href:   route('users.index'),
+        icon:   'users',
         active: route().current('users.*'),
-        show: isAdmin.value,
+        show:   isAdmin.value,
     },
     {
-        name: 'Billing',
-        href: route('billing.plans'),
-        icon: '◻',
+        name:   'Billing',
+        href:   route('billing.plans'),
+        icon:   'billing',
         active: route().current('billing.*'),
-        show: isAdmin.value,
+        show:   isAdmin.value,
     },
     {
-        name: 'Settings',
-        href: route('profile.edit'),
-        icon: '◻',
+        name:   'Support',
+        href:   route('support'),
+        icon:   'support',
+        active: route().current('support'),
+        show:   true,
+    },
+    {
+        name:   'Integrations',
+        href:   route('integrations.index'),
+        icon:   'integrations',
+        active: route().current('integrations.*'),
+        show:   isAdmin.value,
+        badge:  plan.value?.features?.custom_integrations ? null : 'Enterprise',
+    },
+    {
+        name:   'Settings',
+        href:   route('profile.edit'),
+        icon:   'settings',
         active: route().current('profile.*'),
-        show: true,
+        show:   true,
     },
 ]);
 
@@ -107,22 +126,40 @@ function logout() {
                             'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors'
                         ]"
                     >
-                        <span class="shrink-0 text-lg leading-none">
-                            <svg v-if="item.name === 'Dashboard'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span class="shrink-0">
+                            <!-- Dashboard -->
+                            <svg v-if="item.icon === 'dashboard'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
                             </svg>
-                            <svg v-else-if="item.name === 'Users'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <!-- Users -->
+                            <svg v-else-if="item.icon === 'users'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197"/>
                             </svg>
-                            <svg v-else-if="item.name === 'Billing'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <!-- Billing -->
+                            <svg v-else-if="item.icon === 'billing'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
                             </svg>
+                            <!-- Support -->
+                            <svg v-else-if="item.icon === 'support'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
+                            </svg>
+                            <!-- Integrations -->
+                            <svg v-else-if="item.icon === 'integrations'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                            </svg>
+                            <!-- Settings -->
                             <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                             </svg>
                         </span>
-                        <span v-if="sidebarOpen">{{ item.name }}</span>
+                        <template v-if="sidebarOpen">
+                            <span class="flex-1">{{ item.name }}</span>
+                            <span
+                                v-if="item.badge"
+                                class="text-[10px] font-semibold bg-amber-100 text-amber-700 rounded px-1.5 py-0.5"
+                            >{{ item.badge }}</span>
+                        </template>
                     </Link>
                 </template>
             </nav>
@@ -169,10 +206,13 @@ function logout() {
                         leave-to-class="opacity-0 translate-y-1"
                     >
                         <div
-                            v-if="showFlash && flash?.success"
-                            class="bg-emerald-50 text-emerald-700 text-sm px-4 py-2 rounded-lg border border-emerald-200"
+                            v-if="showFlash"
+                            class="text-sm px-4 py-2 rounded-lg border"
+                            :class="flashType === 'success'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-red-50 text-red-700 border-red-200'"
                         >
-                            {{ flash.success }}
+                            {{ flashType === 'success' ? flash?.success : flash?.error }}
                         </div>
                     </transition>
                 </div>

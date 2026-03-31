@@ -12,8 +12,26 @@ const props = defineProps({
 const page = usePage();
 const { isAdmin } = usePermissions();
 const currentUserId = computed(() => page.props.auth.user?.id);
+const plan          = computed(() => page.props.plan);
 
-// Search
+// Whether the tenant can still invite more users
+const canInvite = computed(() => {
+    if (!plan.value?.subscribed) return false;
+    const limit = plan.value?.user_limit;
+    if (limit === null) return true; // unlimited (Enterprise)
+    return plan.value?.user_count < limit;
+});
+
+const inviteBlockReason = computed(() => {
+    if (!plan.value?.subscribed) return 'An active subscription is required to invite members.';
+    const limit = plan.value?.user_limit;
+    if (limit !== null && plan.value?.user_count >= limit) {
+        return `Your ${plan.value?.name} plan allows up to ${limit} users. Upgrade to invite more.`;
+    }
+    return null;
+});
+
+// ── Search ────────────────────────────────────────────────────────────────
 const searchInput = ref(props.search ?? '');
 let searchTimer;
 watch(searchInput, (val) => {
@@ -23,14 +41,25 @@ watch(searchInput, (val) => {
     }, 300);
 });
 
-// Invite user form
+// ── Invite modal ──────────────────────────────────────────────────────────
 const showInviteModal = ref(false);
 const inviteForm = useForm({ name: '', email: '' });
 
-// Edit user form
-const showEditModal = ref(false);
-const editForm = useForm({ name: '', email: '' });
-let editingUserId = ref(null);
+function openInvite() {
+    if (!canInvite.value) return; // server will also reject, but guard the modal
+    showInviteModal.value = true;
+}
+
+function invite() {
+    inviteForm.post(route('users.store'), {
+        onSuccess: () => { showInviteModal.value = false; inviteForm.reset(); }
+    });
+}
+
+// ── Edit modal ────────────────────────────────────────────────────────────
+const showEditModal  = ref(false);
+const editForm       = useForm({ name: '', email: '' });
+const editingUserId  = ref(null);
 
 function openEdit(user) {
     editingUserId.value = user.id;
@@ -45,31 +74,39 @@ function saveEdit() {
     });
 }
 
-function invite() {
-    inviteForm.post(route('users.store'), {
-        onSuccess: () => { showInviteModal.value = false; inviteForm.reset(); }
+// ── Delete modal ──────────────────────────────────────────────────────────
+const showDeleteModal = ref(false);
+const deletingUser    = ref(null);
+
+function openDelete(user) {
+    deletingUser.value  = user;
+    showDeleteModal.value = true;
+}
+
+function confirmDelete() {
+    router.delete(route('users.force-delete', deletingUser.value.id), {
+        onSuccess: () => { showDeleteModal.value = false; deletingUser.value = null; },
     });
 }
 
-// Role update
+// ── Role / status actions ─────────────────────────────────────────────────
 function updateRole(userId, role) {
     router.put(route('users.role', userId), { role }, { preserveScroll: true });
 }
 
-// Deactivate
 function deactivate(userId) {
-    if (confirm('Deactivate this user?')) {
+    if (confirm('Deactivate this user? They will lose access but remain visible in this list.')) {
         router.delete(route('users.destroy', userId), { preserveScroll: true });
     }
 }
 
-// Reactivate
 function reactivate(userId) {
     if (confirm('Reactivate this user?')) {
         router.put(route('users.reactivate', userId), {}, { preserveScroll: true });
     }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────
 const statusColor = (status) => status === 'active'
     ? 'bg-emerald-50 text-emerald-700'
     : 'bg-gray-100 text-gray-500';
@@ -108,13 +145,35 @@ const roleDropdownStyle = (role) => ({
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
             </div>
-            <button
-                v-if="isAdmin"
-                @click="showInviteModal = true"
-                class="ml-auto bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-            >
-                + Invite User
-            </button>
+
+            <div v-if="isAdmin" class="ml-auto flex items-center gap-3">
+                <!-- User count / limit indicator -->
+                <span v-if="plan" class="text-xs text-gray-400">
+                    {{ plan.user_count }} /
+                    {{ plan.user_limit === null ? '∞' : plan.user_limit }} users
+                </span>
+                <button
+                    @click="openInvite"
+                    :disabled="!canInvite"
+                    :title="inviteBlockReason ?? 'Invite a new team member'"
+                    class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    + Invite User
+                </button>
+            </div>
+        </div>
+
+        <!-- No-subscription notice -->
+        <div
+            v-if="isAdmin && plan && !plan.subscribed"
+            class="mb-6 rounded-xl bg-amber-50 border border-amber-200 px-5 py-4 flex items-center justify-between"
+        >
+            <p class="text-sm text-amber-800 font-medium">
+                Subscribe to a plan to start inviting team members.
+            </p>
+            <Link :href="route('billing.plans')" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 underline">
+                View Plans →
+            </Link>
         </div>
 
         <!-- Table -->
@@ -145,7 +204,6 @@ const roleDropdownStyle = (role) => ({
                                 </div>
                             </td>
                             <td class="px-6 py-4 min-w-[130px]">
-                                <!-- Editable role dropdown — hidden for the current admin (self) -->
                                 <select
                                     v-if="isAdmin && user.id !== currentUserId"
                                     :value="user.roles[0]?.name"
@@ -157,7 +215,6 @@ const roleDropdownStyle = (role) => ({
                                     <option value="admin">Admin</option>
                                     <option value="member">Member</option>
                                 </select>
-                                <!-- Read-only badge for self or non-admins -->
                                 <span
                                     v-else
                                     class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize"
@@ -174,25 +231,30 @@ const roleDropdownStyle = (role) => ({
                             <td class="px-6 py-4 text-right whitespace-nowrap">
                                 <template v-if="isAdmin">
                                     <template v-if="user.id !== currentUserId">
-                                        <button
-                                            @click="openEdit(user)"
-                                            class="text-xs text-indigo-600 hover:text-indigo-800 font-medium mr-3"
-                                        >
+                                        <button @click="openEdit(user)" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium mr-3">
                                             Edit
                                         </button>
                                         <button
                                             v-if="user.status === 'active'"
                                             @click="deactivate(user.id)"
-                                            class="text-xs text-red-600 hover:text-red-800 font-medium"
+                                            class="text-xs text-amber-600 hover:text-amber-800 font-medium mr-3"
                                         >
                                             Deactivate
                                         </button>
                                         <button
                                             v-else
                                             @click="reactivate(user.id)"
-                                            class="text-xs text-emerald-600 hover:text-emerald-800 font-medium"
+                                            class="text-xs text-emerald-600 hover:text-emerald-800 font-medium mr-3"
                                         >
                                             Reactivate
+                                        </button>
+                                        <!-- Delete only available for inactive users -->
+                                        <button
+                                            v-if="user.status === 'inactive'"
+                                            @click="openDelete(user)"
+                                            class="text-xs text-red-600 hover:text-red-800 font-medium"
+                                        >
+                                            Delete
                                         </button>
                                     </template>
                                     <span v-else class="text-xs text-gray-400 italic">You</span>
@@ -207,21 +269,13 @@ const roleDropdownStyle = (role) => ({
             <div v-if="users.last_page > 1" class="px-6 py-4 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
                 <span>Showing {{ users.from }}–{{ users.to }} of {{ users.total }}</span>
                 <div class="flex gap-2">
-                    <Link
-                        v-if="users.prev_page_url"
-                        :href="users.prev_page_url"
-                        class="px-3 py-1 border border-gray-200 rounded hover:bg-gray-50"
-                    >← Prev</Link>
-                    <Link
-                        v-if="users.next_page_url"
-                        :href="users.next_page_url"
-                        class="px-3 py-1 border border-gray-200 rounded hover:bg-gray-50"
-                    >Next →</Link>
+                    <Link v-if="users.prev_page_url" :href="users.prev_page_url" class="px-3 py-1 border border-gray-200 rounded hover:bg-gray-50">← Prev</Link>
+                    <Link v-if="users.next_page_url" :href="users.next_page_url" class="px-3 py-1 border border-gray-200 rounded hover:bg-gray-50">Next →</Link>
                 </div>
             </div>
         </div>
 
-        <!-- Edit Modal -->
+        <!-- ── Edit Modal ── -->
         <teleport to="body">
             <div v-if="showEditModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                 <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -248,11 +302,14 @@ const roleDropdownStyle = (role) => ({
             </div>
         </teleport>
 
-        <!-- Invite Modal -->
+        <!-- ── Invite Modal ── -->
         <teleport to="body">
             <div v-if="showInviteModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
                 <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Invite Team Member</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-1">Invite Team Member</h2>
+                    <p v-if="plan" class="text-xs text-gray-400 mb-4">
+                        {{ plan.user_count }} / {{ plan.user_limit === null ? '∞' : plan.user_limit }} seats used
+                    </p>
                     <form @submit.prevent="invite" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -271,6 +328,26 @@ const roleDropdownStyle = (role) => ({
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </teleport>
+
+        <!-- ── Delete Confirmation Modal ── -->
+        <teleport to="body">
+            <div v-if="showDeleteModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-2">Delete User?</h2>
+                    <p class="text-sm text-gray-500 mb-6">
+                        <strong>{{ deletingUser?.name }}</strong> will be permanently removed and cannot be recovered.
+                    </p>
+                    <div class="flex gap-3">
+                        <button @click="showDeleteModal = false" class="flex-1 border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button @click="confirmDelete" class="flex-1 bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-700">
+                            Delete Permanently
+                        </button>
+                    </div>
                 </div>
             </div>
         </teleport>
