@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
 import { usePermissions } from '@/composables/usePermissions';
 
@@ -15,22 +15,27 @@ const showFlash = ref(false);
 const flashType = ref('success'); // 'success' | 'error'
 let flashTimer;
 
-function triggerFlash() {
-    const msg = flash.value?.success || flash.value?.error;
-    if (msg) {
-        flashType.value  = flash.value?.success ? 'success' : 'error';
-        showFlash.value  = true;
-        clearTimeout(flashTimer);
-        flashTimer = setTimeout(() => { showFlash.value = false; }, 4000);
-    }
-}
+// Incremented on every Inertia navigation so the watcher fires even when the
+// flash message string is identical to the previous one (watch() skips same values).
+const flashKey = ref(0);
+const stopNavListener = router.on('navigate', () => { flashKey.value++; });
+onUnmounted(() => stopNavListener());
 
-// Fire on initial page load
-triggerFlash();
-
-// Use nextTick so Vue has processed the updated page.props before we read flash
-const stopFlashListener = router.on('navigate', () => nextTick(triggerFlash));
-onUnmounted(() => stopFlashListener());
+// Watch both the navigation counter AND the flash content.
+// flush:'post' ensures we read reactive props after Vue has applied all updates.
+watch(
+    [flashKey, () => flash.value?.success, () => flash.value?.error],
+    ([, success, error]) => {
+        const msg = success || error;
+        if (msg) {
+            flashType.value = success ? 'success' : 'error';
+            showFlash.value = true;
+            clearTimeout(flashTimer);
+            flashTimer = setTimeout(() => { showFlash.value = false; }, 4000);
+        }
+    },
+    { flush: 'post' }
+);
 
 const initials = computed(() => {
     const parts = (user.value?.name || 'U').split(' ');
