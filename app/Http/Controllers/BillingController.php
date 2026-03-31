@@ -75,8 +75,13 @@ class BillingController extends Controller
     {
         $this->authorizeAdmin();
 
-        return redirect()->route('billing.portal')
-            ->with('success', 'Subscription activated! Welcome aboard.');
+        $tenant       = app('tenant');
+        $subscription = $tenant->subscription('default');
+
+        return Inertia::render('Billing/ThankYou', [
+            'plan_name'  => $subscription ? $this->getPlanName($subscription->stripe_price) : null,
+            'plan_price' => $subscription ? $this->getPlanPrice($subscription->stripe_price) : null,
+        ]);
     }
 
     public function portal(Request $request)
